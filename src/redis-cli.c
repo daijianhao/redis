@@ -929,20 +929,25 @@ static sds cliFormatReplyTTY(redisReply *r, char *prefix) {
     sds out = sdsempty();
     switch (r->type) {
         case REDIS_REPLY_ERROR:
-            ou = sdscatprintf(out, "(error) %s\n", r->str);
+            //处理错误回复
+            out = sdscatprintf(out, "(error) %s\n", r->str);
             break;
         case REDIS_REPLY_STATUS:
+            //处理状态回复
             out = sdscat(out, r->str);
             out = sdscat(out, "\n");
             break;
         case REDIS_REPLY_INTEGER:
+            //处理整数回复
             out = sdscatprintf(out, "(integer) %lld\n", r->integer);
             break;
         case REDIS_REPLY_DOUBLE:
+            //处理浮点数回复
             out = sdscatprintf(out, "(double) %s\n", r->str);
             break;
         case REDIS_REPLY_STRING:
         case REDIS_REPLY_VERB:
+            //处理字符串或逐个的字符回复
             /* If you are producing output for the standard output we want
             * a more interesting output with quoted characters and so forth,
             * unless it's a verbatim string type. */
@@ -955,12 +960,14 @@ static sds cliFormatReplyTTY(redisReply *r, char *prefix) {
             }
             break;
         case REDIS_REPLY_NIL:
+            //处理空回复
             out = sdscat(out, "(nil)\n");
             break;
         case REDIS_REPLY_BOOL:
+            //处理boolean回复
             out = sdscat(out, r->integer ? "(true)\n" : "(false)\n");
             break;
-        case REDIS_REPLY_ARRAY:
+        case REDIS_REPLY_ARRAY://多字符串字符串
         case REDIS_REPLY_MAP:
         case REDIS_REPLY_SET:
         case REDIS_REPLY_PUSH:
