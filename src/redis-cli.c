@@ -968,10 +968,10 @@ static sds cliFormatReplyTTY(redisReply *r, char *prefix) {
             out = sdscat(out, r->integer ? "(true)\n" : "(false)\n");
             break;
         case REDIS_REPLY_ARRAY://多字符串字符串
-        case REDIS_REPLY_MAP:
-        case REDIS_REPLY_SET:
+        case REDIS_REPLY_MAP://map回复
+        case REDIS_REPLY_SET://set回复
         case REDIS_REPLY_PUSH:
-            if (r->elements == 0) {
+            if (r->elements == 0) {//没有回复内容
                 if (r->type == REDIS_REPLY_ARRAY)
                     out = sdscat(out, "(empty array)\n");
                 else if (r->type == REDIS_REPLY_MAP)
