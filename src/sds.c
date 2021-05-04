@@ -83,6 +83,7 @@ sds sdsdup(const sds s) {
 }
 
 /* Free an sds string. No operation is performed if 's' is NULL. */
+//释放sds内存
 void sdsfree(sds s) {
     if (s == NULL) return;
     zfree(s-sizeof(struct sdshdr));
@@ -131,18 +132,25 @@ sds sdsMakeRoomFor(sds s, size_t addlen) {
     size_t free = sdsavail(s);
     size_t len, newlen;
 
+    //可用空间满足要增加的空间，直接返回
     if (free >= addlen) return s;
     len = sdslen(s);
     sh = (void*) (s-(sizeof(struct sdshdr)));
+    //拼接后新的长度
     newlen = (len+addlen);
     if (newlen < SDS_MAX_PREALLOC)
+        //扩容为2倍
         newlen *= 2;
     else
+        //扩容增加1M
         newlen += SDS_MAX_PREALLOC;
+    //重新分配内存
     newsh = zrealloc(sh, sizeof(struct sdshdr)+newlen+1);
     if (newsh == NULL) return NULL;
 
+    //设置剩余内存
     newsh->free = newlen - len;
+    //返回buf的指针
     return newsh->buf;
 }
 
@@ -238,15 +246,17 @@ sds sdsgrowzero(sds s, size_t len) {
  * references must be substituted with the new pointer returned by the call. */
 sds sdscatlen(sds s, const void *t, size_t len) {
     struct sdshdr *sh;
+    //原sds长度，这里是有效字符长度，不包括结束符
     size_t curlen = sdslen(s);
-
+    //扩容
     s = sdsMakeRoomFor(s,len);
     if (s == NULL) return NULL;
     sh = (void*) (s-(sizeof(struct sdshdr)));
+    //将新内容追加
     memcpy(s+curlen, t, len);
     sh->len = curlen+len;
     sh->free = sh->free-len;
-    s[curlen+len] = '\0';
+    s[curlen+len] = '\0';//设置结束符
     return s;
 }
 
@@ -254,6 +264,12 @@ sds sdscatlen(sds s, const void *t, size_t len) {
  *
  * After the call, the passed sds string is no longer valid and all the
  * references must be substituted with the new pointer returned by the call. */
+/**
+ * 拼接sds
+ * @param s 原sds
+ * @param t 要拼接的字符串
+ * @return
+ */
 sds sdscat(sds s, const char *t) {
     return sdscatlen(s, t, strlen(t));
 }
@@ -562,6 +578,9 @@ sds sdscatfmt(sds s, char const *fmt, ...) {
  *
  * Output will be just "Hello World".
  */
+/**
+ * 删除两头的指定字符
+ */
 sds sdstrim(sds s, const char *cset) {
     struct sdshdr *sh = (void*) (s-(sizeof(struct sdshdr)));
     char *start, *end, *sp, *ep;
@@ -572,8 +591,13 @@ sds sdstrim(sds s, const char *cset) {
     while(sp <= end && strchr(cset, *sp)) sp++;
     while(ep > start && strchr(cset, *ep)) ep--;
     len = (sp > ep) ? 0 : ((ep-sp)+1);
+    //memmove用于拷贝字节，如果目标区域和源区域有重叠的话，memmove能够保证源串在被覆盖之前将重叠区域的字节拷贝到目标区域中，
+    // 但复制后源内容会被更改。但是当目标区域与源区域没有重叠则和memcpy函数功能相同
+    //原型：void *memmove( void* dest, const void* src, size_t count );
+    //功能：由src所指内存区域复制count个字节到dest所指内存区域。
     if (sh->buf != sp) memmove(sh->buf, sp, len);
-    sh->buf[len] = '\0';
+    sh->buf[len] = '\0';//设置结束符，其余内存并不置为空
+    //增加可用内存
     sh->free = sh->free+(sh->len-len);
     sh->len = len;
     return s;

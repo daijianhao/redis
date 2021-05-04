@@ -211,6 +211,8 @@ intset *intsetAdd(intset *is, int64_t value, uint8_t *success) {
      * because it lies outside the range of existing values. */
     if (valenc > intrev32ifbe(is->encoding)) {
         /* This always succeeds, so we don't need to curry *success. */
+        //如果新加入的value长度超过当前元素长度，就会升级所有元素长度
+        //todo 整数集合不支持降级
         return intsetUpgradeAndAdd(is,value);
     } else {
         /* Abort if the value is already present in the set.

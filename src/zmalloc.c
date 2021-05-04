@@ -94,22 +94,31 @@ void zlibc_free(void *ptr) {
     if (zmalloc_thread_safe) { \
         update_zmalloc_stat_add(_n); \
     } else { \
+        //增加已使用的内存
         used_memory += _n; \
     } \
 } while(0)
 
 #define update_zmalloc_stat_free(__n) do { \
     size_t _n = (__n); \
-    if (_n&(sizeof(long)-1)) _n += sizeof(long)-(_n&(sizeof(long)-1)); \
+    if (_n&(sizeof(long)-1)) \
+        //将size按long对齐，小于long则改为long
+        _n += sizeof(long)-(_n&(sizeof(long)-1)); \
     if (zmalloc_thread_safe) { \
+        //如果开启了线程安全，则会加锁来修改used_memory
         update_zmalloc_stat_sub(_n); \
     } else { \
+        //使用的内存- _n
         used_memory -= _n; \
     } \
 } while(0)
 
+    //已经分配的内存总数
 static size_t used_memory = 0;
+//更新内存统计数时用到的判断线程安全的标志
 static int zmalloc_thread_safe = 0;
+//内存分配更新统计数据时用到的互斥量
+//POSIX定义了一个宏PTHREAD_MUTEX_INITIALIZER来静态初始化互斥锁
 pthread_mutex_t used_memory_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static void zmalloc_default_oom(size_t size) {
@@ -136,6 +145,7 @@ void *zmalloc(size_t size) {
 }
 
 void *zcalloc(size_t size) {
+    //在gcc编译器中malloc与calloc它们都是实现内存分配。但是也有点小区别，就是malloc分配内存不会将数据清零，而calloc则会将数据清零
     void *ptr = calloc(1, size+PREFIX_SIZE);
 
     if (!ptr) zmalloc_oom_handler(size);
@@ -149,6 +159,9 @@ void *zcalloc(size_t size) {
 #endif
 }
 
+/**
+ * 重新分配内存，会将ptr中的数据复制到新分配的内存中
+ */
 void *zrealloc(void *ptr, size_t size) {
 #ifndef HAVE_MALLOC_SIZE
     void *realptr;
@@ -158,22 +171,30 @@ void *zrealloc(void *ptr, size_t size) {
 
     if (ptr == NULL) return zmalloc(size);
 #ifdef HAVE_MALLOC_SIZE
+    //获取原size
     oldsize = zmalloc_size(ptr);
+    //重新分配
     newptr = realloc(ptr,size);
+    //分配失败，处理异常
     if (!newptr) zmalloc_oom_handler(size);
-
+    //更新统计数据
     update_zmalloc_stat_free(oldsize);
     update_zmalloc_stat_alloc(zmalloc_size(newptr));
     return newptr;
 #else
+    //指针前移到size头处
     realptr = (char*)ptr-PREFIX_SIZE;
     oldsize = *((size_t*)realptr);
+    //重新分配
     newptr = realloc(realptr,size+PREFIX_SIZE);
     if (!newptr) zmalloc_oom_handler(size);
 
     *((size_t*)newptr) = size;
+    //更新统计数据，先从已使用内存数中减去原来占用的内存
     update_zmalloc_stat_free(oldsize);
+    //再将已使用内存数加上新分配内存数
     update_zmalloc_stat_alloc(size);
+    //返回时，增加指针偏移量
     return (char*)newptr+PREFIX_SIZE;
 #endif
 }
@@ -183,15 +204,20 @@ void *zrealloc(void *ptr, size_t size) {
  * information as the first bytes of every allocation. */
 #ifndef HAVE_MALLOC_SIZE
 size_t zmalloc_size(void *ptr) {
+    //如果
     void *realptr = (char*)ptr-PREFIX_SIZE;
     size_t size = *((size_t*)realptr);
     /* Assume at least that all the allocations are padded at sizeof(long) by
      * the underlying allocator. */
+    //将size按long对齐，小于long则改为long
     if (size&(sizeof(long)-1)) size += sizeof(long)-(size&(sizeof(long)-1));
     return size+PREFIX_SIZE;
 }
 #endif
 
+/**
+ * 释放内存
+ */
 void zfree(void *ptr) {
 #ifndef HAVE_MALLOC_SIZE
     void *realptr;

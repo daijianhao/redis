@@ -32,9 +32,20 @@
 #define __INTSET_H
 #include <stdint.h>
 
+/**
+ * 整数集合
+ */
 typedef struct intset {
+    //元素编码，共三种大小
+    /*
+     * #define INTSET_ENC_INT16 (sizeof(int16_t))
+     * #define INTSET_ENC_INT32 (sizeof(int32_t))
+     * #define INTSET_ENC_INT64 (sizeof(int64_t))
+     */
     uint32_t encoding;
+    //元素个数
     uint32_t length;
+    //保存所有元素，按从小到大排列
     int8_t contents[];
 } intset;
 

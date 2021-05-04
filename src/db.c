@@ -90,6 +90,12 @@ robj *lookupKeyWriteOrReply(redisClient *c, robj *key, robj *reply) {
  * counter of the value if needed.
  *
  * The program is aborted if the key already exists. */
+/**
+ * 往当前的DB的hash表中添加元素
+ * @param db
+ * @param key
+ * @param val
+ */
 void dbAdd(redisDb *db, robj *key, robj *val) {
     sds copy = sdsdup(key->ptr);
     int retval = dictAdd(db->dict, copy, val);

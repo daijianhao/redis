@@ -53,6 +53,9 @@ void freeClientMultiState(redisClient *c) {
 }
 
 /* Add a new command into the MULTI commands queue */
+/**
+ * 添加命令到命令集合
+ */
 void queueMultiCommand(redisClient *c) {
     multiCmd *mc;
     int j;

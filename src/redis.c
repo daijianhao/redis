@@ -648,13 +648,19 @@ dictType replScriptCacheDictType = {
     NULL                        /* val destructor */
 };
 
+/**
+ * 判断hashTable是否需要resize
+ * @param dict
+ * @return
+ */
 int htNeedsResize(dict *dict) {
     long long size, used;
-
+    //ht0+ht1的总size
     size = dictSlots(dict);
+    //ht0+ht1的总使用数
     used = dictSize(dict);
     return (size && used && size > DICT_HT_INITIAL_SIZE &&
-            (used*100/size < REDIS_HT_MINFILL));
+            (used*100/size < REDIS_HT_MINFILL));//使用率小于10%
 }
 
 /* If the percentage of used slots in the HT reaches REDIS_HT_MINFILL
@@ -1006,6 +1012,9 @@ void clientsCron(void) {
 /* This function handles 'background' operations we are required to do
  * incrementally in Redis databases, such as active key expiring, resizing,
  * rehashing. */
+/**
+ * 后台处理，包括key过期，resizing,rehash等
+ */
 void databasesCron(void) {
     /* Expire keys by random sampling. Not required for slaves
      * as master will synthesize DELs for us. */
@@ -1864,7 +1873,7 @@ void initServer(void) {
      * domain sockets. */
     for (j = 0; j < server.ipfd_count; j++) {
         if (aeCreateFileEvent(server.el, server.ipfd[j], AE_READABLE,
-            acceptTcpHandler,NULL) == AE_ERR)
+            acceptTcpHandler,NULL) == AE_ERR)//创建EventLoop，绑定事件处理器
             {
                 redisPanic(
                     "Unrecoverable error creating server.ipfd file event.");
@@ -2053,6 +2062,11 @@ void forceCommandPropagation(redisClient *c, int flags) {
 }
 
 /* Call() is the core of Redis execution of a command */
+/**
+ * 执行命令
+ * @param c
+ * @param flags
+ */
 void call(redisClient *c, int flags) {
     long long dirty, start, duration;
     int client_old_flags = c->flags;
@@ -2071,6 +2085,7 @@ void call(redisClient *c, int flags) {
     redisOpArrayInit(&server.also_propagate);
     dirty = server.dirty;
     start = ustime();
+    //执行命令
     c->cmd->proc(c);
     duration = ustime()-start;
     dirty = server.dirty-dirty;
@@ -2105,6 +2120,7 @@ void call(redisClient *c, int flags) {
     }
 
     /* Propagate the command into the AOF and replication link */
+    //传播命令到AOF
     if (flags & REDIS_CALL_PROPAGATE) {
         int flags = REDIS_PROPAGATE_NONE;
 
@@ -2157,6 +2173,9 @@ int processCommand(redisClient *c) {
 
     /* Now lookup the command and check ASAP about trivial error conditions
      * such as wrong arity, bad command name and so forth. */
+    /**
+     * 这里设置要调用的命名，argv中保存了所有接收到的命令，这里找到对应的RedisCommand
+     */
     c->cmd = c->lastcmd = lookupCommand(c->argv[0]->ptr);
     if (!c->cmd) {
         flagTransaction(c);
@@ -2172,6 +2191,7 @@ int processCommand(redisClient *c) {
     }
 
     /* Check if the user is authenticated */
+    //检查是否通过认证
     if (server.requirepass && !c->authenticated && c->cmd->proc != authCommand)
     {
         flagTransaction(c);
@@ -2200,6 +2220,7 @@ int processCommand(redisClient *c) {
             } else {
                 flagTransaction(c);
             }
+            //集群模式重定向
             clusterRedirectClient(c,n,hashslot,error_code);
             return REDIS_OK;
         }
@@ -2210,7 +2231,7 @@ int processCommand(redisClient *c) {
      * First we try to free some memory if possible (if there are volatile
      * keys in the dataset). If there are not the only thing we can do
      * is returning an error. */
-    if (server.maxmemory) {
+    if (server.maxmemory) {//处理OOM
         int retval = freeMemoryIfNeeded();
         /* freeMemoryIfNeeded may flush slave output buffers. This may result
          * into a slave, that may be the active client, to be freed. */
@@ -2270,6 +2291,7 @@ int processCommand(redisClient *c) {
     }
 
     /* Only allow SUBSCRIBE and UNSUBSCRIBE in the context of Pub/Sub */
+    //只允许PUBSUB等命令
     if (c->flags & REDIS_PUBSUB &&
         c->cmd->proc != pingCommand &&
         c->cmd->proc != subscribeCommand &&
@@ -2315,6 +2337,7 @@ int processCommand(redisClient *c) {
     }
 
     /* Exec the command */
+    //执行命令
     if (c->flags & REDIS_MULTI &&
         c->cmd->proc != execCommand && c->cmd->proc != discardCommand &&
         c->cmd->proc != multiCommand && c->cmd->proc != watchCommand)
@@ -3601,6 +3624,7 @@ int main(int argc, char **argv) {
     spt_init(argc, argv);
 #endif
     setlocale(LC_COLLATE,"");
+    //开启内存分配时的线程安全特性
     zmalloc_enable_thread_safeness();
     zmalloc_set_oom_handler(redisOutOfMemoryHandler);
     srand(time(NULL)^getpid());

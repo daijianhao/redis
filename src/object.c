@@ -209,7 +209,12 @@ robj *createIntsetObject(void) {
     return o;
 }
 
+/**
+ * 创建一个hash类型
+ * @return
+ */
 robj *createHashObject(void) {
+    //创建一个empty ziplist
     unsigned char *zl = ziplistNew();
     robj *o = createObject(REDIS_HASH, zl);
     o->encoding = REDIS_ENCODING_ZIPLIST;

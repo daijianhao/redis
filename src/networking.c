@@ -73,7 +73,7 @@ redisClient *createClient(int fd) {
         anetEnableTcpNoDelay(NULL,fd);
         if (server.tcpkeepalive)
             anetKeepAlive(NULL,fd,server.tcpkeepalive);
-        if (aeCreateFileEvent(server.el,fd,AE_READABLE,
+        if (aeCreateFileEvent(server.el,fd,AE_READABLE,//创建客户端的事件循环
             readQueryFromClient, c) == AE_ERR)
         {
             close(fd);
@@ -170,6 +170,7 @@ int prepareClientToWrite(redisClient *c) {
          (c->replstate == REDIS_REPL_ONLINE && !c->repl_put_online_on_ack)))
     {
         /* Try to install the write handler. */
+        //绑定客户端可写事件处理器
         if (aeCreateFileEvent(server.el, c->fd, AE_WRITABLE,
                 sendReplyToClient, c) == AE_ERR)
         {
@@ -319,6 +320,7 @@ void _addReplyStringToList(redisClient *c, char *s, size_t len) {
  * -------------------------------------------------------------------------- */
 
 void addReply(redisClient *c, robj *obj) {
+    //如果客户端还未绑定fd可写事件到EventLoop，这里会进行绑定
     if (prepareClientToWrite(c) != REDIS_OK) return;
 
     /* This is an important place where we can avoid copy-on-write
@@ -584,7 +586,7 @@ void copyClientOutputBuffer(redisClient *dst, redisClient *src) {
 #define MAX_ACCEPTS_PER_CALL 1000
 static void acceptCommonHandler(int fd, int flags) {
     redisClient *c;
-    if ((c = createClient(fd)) == NULL) {
+    if ((c = createClient(fd)) == NULL) {//创建客户端对象
         redisLog(REDIS_WARNING,
             "Error registering fd event for the new client: %s (fd=%d)",
             strerror(errno),fd);
@@ -610,6 +612,9 @@ static void acceptCommonHandler(int fd, int flags) {
     c->flags |= flags;
 }
 
+/**
+ * TCP事件处理器
+ */
 void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
     int cport, cfd, max = MAX_ACCEPTS_PER_CALL;
     char cip[REDIS_IP_STR_LEN];
@@ -626,6 +631,7 @@ void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
             return;
         }
         redisLog(REDIS_VERBOSE,"Accepted %s:%d", cip, cport);
+        //读取客户端的命令
         acceptCommonHandler(cfd,0);
     }
 }
@@ -800,6 +806,13 @@ void freeClientsInAsyncFreeQueue(void) {
     }
 }
 
+/**
+ * 发送响应到client
+ * @param el
+ * @param fd
+ * @param privdata
+ * @param mask
+ */
 void sendReplyToClient(aeEventLoop *el, int fd, void *privdata, int mask) {
     redisClient *c = privdata;
     int nwritten = 0, totwritten = 0, objlen;
@@ -810,6 +823,7 @@ void sendReplyToClient(aeEventLoop *el, int fd, void *privdata, int mask) {
 
     while(c->bufpos > 0 || listLength(c->reply)) {
         if (c->bufpos > 0) {
+            //写出数据到对端，这里响应给客户端
             nwritten = write(fd,c->buf+c->sentlen,c->bufpos-c->sentlen);
             if (nwritten <= 0) break;
             c->sentlen += nwritten;
@@ -896,7 +910,11 @@ void resetClient(redisClient *c) {
     if (!(c->flags & REDIS_MULTI) && prevcmd != askingCommand)
         c->flags &= (~REDIS_ASKING);
 }
-
+/**
+ * 处理请求，这里只是将解析到的请求设置到client的argv中 还没真正的处理
+ * @param c
+ * @return
+ */
 int processInlineBuffer(redisClient *c) {
     char *newline;
     int argc, j;
@@ -904,7 +922,7 @@ int processInlineBuffer(redisClient *c) {
     size_t querylen;
 
     /* Search for end of line */
-    newline = strchr(c->querybuf,'\n');
+    newline = strchr(c->querybuf,'\n');//取到一行
 
     /* Nothing to do without a \r\n */
     if (newline == NULL) {
@@ -948,6 +966,7 @@ int processInlineBuffer(redisClient *c) {
     /* Create redis objects for all arguments. */
     for (c->argc = 0, j = 0; j < argc; j++) {
         if (sdslen(argv[j])) {
+            //设置命令和参数到Client对象
             c->argv[c->argc] = createObject(REDIS_STRING,argv[j]);
             c->argc++;
         } else {
@@ -1109,8 +1128,15 @@ int processMultibulkBuffer(redisClient *c) {
     return REDIS_ERR;
 }
 
+/**
+ * 处理客户端输入
+ * @param c
+ */
 void processInputBuffer(redisClient *c) {
     /* Keep processing while there is something in the input buffer */
+    /**
+     * 这里循环执行，直到缓冲区中的命令执行完
+     */
     while(sdslen(c->querybuf)) {
         /* Return if clients are paused. */
         if (!(c->flags & REDIS_SLAVE) && clientsArePaused()) return;
@@ -1132,9 +1158,9 @@ void processInputBuffer(redisClient *c) {
             }
         }
 
-        if (c->reqtype == REDIS_REQ_INLINE) {
+        if (c->reqtype == REDIS_REQ_INLINE) {//单个请求
             if (processInlineBuffer(c) != REDIS_OK) break;
-        } else if (c->reqtype == REDIS_REQ_MULTIBULK) {
+        } else if (c->reqtype == REDIS_REQ_MULTIBULK) {//多个请求一起
             if (processMultibulkBuffer(c) != REDIS_OK) break;
         } else {
             redisPanic("Unknown request type");
@@ -1145,6 +1171,7 @@ void processInputBuffer(redisClient *c) {
             resetClient(c);
         } else {
             /* Only reset the client when the command was executed. */
+            //真正的处理命令
             if (processCommand(c) == REDIS_OK)
                 resetClient(c);
             /* freeMemoryIfNeeded may flush slave output buffers. This may result
@@ -1154,6 +1181,9 @@ void processInputBuffer(redisClient *c) {
     }
 }
 
+/**
+ * 客户端读取事件处理器
+ */
 void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
     redisClient *c = (redisClient*) privdata;
     int nread, readlen;
@@ -1180,6 +1210,7 @@ void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
     qblen = sdslen(c->querybuf);
     if (c->querybuf_peak < qblen) c->querybuf_peak = qblen;
     c->querybuf = sdsMakeRoomFor(c->querybuf, readlen);
+    //从fd读取数据
     nread = read(fd, c->querybuf+qblen, readlen);
     if (nread == -1) {
         if (errno == EAGAIN) {
@@ -1195,6 +1226,7 @@ void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
         return;
     }
     if (nread) {
+        //增加客户端输入缓冲区大小
         sdsIncrLen(c->querybuf,nread);
         c->lastinteraction = server.unixtime;
         if (c->flags & REDIS_MASTER) c->reploff += nread;
@@ -1203,7 +1235,7 @@ void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
         server.current_client = NULL;
         return;
     }
-    if (sdslen(c->querybuf) > server.client_max_querybuf_len) {
+    if (sdslen(c->querybuf) > server.client_max_querybuf_len) {//输入缓冲区超出最大，关闭客户端
         sds ci = catClientInfoString(sdsempty(),c), bytes = sdsempty();
 
         bytes = sdscatrepr(bytes,c->querybuf,64);
@@ -1213,6 +1245,7 @@ void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
         freeClient(c);
         return;
     }
+    //处理缓冲区中的数据
     processInputBuffer(c);
     server.current_client = NULL;
 }

@@ -396,8 +396,9 @@ int aeProcessEvents(aeEventLoop *eventLoop, int flags)
                 tvp = NULL; /* wait forever */
             }
         }
-
+        //拉取一次事件
         numevents = aeApiPoll(eventLoop, tvp);
+        //遍历ready的事件
         for (j = 0; j < numevents; j++) {
             aeFileEvent *fe = &eventLoop->events[eventLoop->fired[j].fd];
             int mask = eventLoop->fired[j].mask;
@@ -407,14 +408,15 @@ int aeProcessEvents(aeEventLoop *eventLoop, int flags)
 	    /* note the fe->mask & mask & ... code: maybe an already processed
              * event removed an element that fired and we still didn't
              * processed, so we check if the event is still valid. */
-            if (fe->mask & mask & AE_READABLE) {
+            if (fe->mask & mask & AE_READABLE) {//可读事件
                 rfired = 1;
                 fe->rfileProc(eventLoop,fd,fe->clientData,mask);
             }
-            if (fe->mask & mask & AE_WRITABLE) {
+            if (fe->mask & mask & AE_WRITABLE) {//可写事件
                 if (!rfired || fe->wfileProc != fe->rfileProc)
                     fe->wfileProc(eventLoop,fd,fe->clientData,mask);
             }
+            //处理的事件数+1
             processed++;
         }
     }
@@ -452,6 +454,7 @@ void aeMain(aeEventLoop *eventLoop) {
     while (!eventLoop->stop) {
         if (eventLoop->beforesleep != NULL)
             eventLoop->beforesleep(eventLoop);
+        //开启事件循环
         aeProcessEvents(eventLoop, AE_ALL_EVENTS);
     }
 }

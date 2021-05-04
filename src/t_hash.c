@@ -44,8 +44,10 @@ void hashTypeTryConversion(robj *o, robj **argv, int start, int end) {
 
     for (i = start; i <= end; i++) {
         if (sdsEncodedObject(argv[i]) &&
+            //hash表中存放的数据超过hash_max_ziplist_value，则转换为真正的hash
             sdslen(argv[i]->ptr) > server.hash_max_ziplist_value)
         {
+            //转换成真正的hash表
             hashTypeConvert(o, REDIS_ENCODING_HT);
             break;
         }
@@ -393,10 +395,18 @@ robj *hashTypeCurrentObject(hashTypeIterator *hi, int what) {
     return dst;
 }
 
+/**
+ * 创建hash类型
+ * @param c
+ * @param key
+ * @return
+ */
 robj *hashTypeLookupWriteOrCreate(redisClient *c, robj *key) {
+    //查找key
     robj *o = lookupKeyWrite(c->db,key);
-    if (o == NULL) {
+    if (o == NULL) {//没有则新建
         o = createHashObject();
+        //加入db的key hashTable中
         dbAdd(c->db,key,o);
     } else {
         if (o->type != REDIS_HASH) {
@@ -407,18 +417,24 @@ robj *hashTypeLookupWriteOrCreate(redisClient *c, robj *key) {
     return o;
 }
 
+/**
+ * 这里的转换是针对用户设置hash类型的key，与每个DB自身的keyspace的hashTable不是一回事
+ * @param o
+ * @param enc
+ */
 void hashTypeConvertZiplist(robj *o, int enc) {
     redisAssert(o->encoding == REDIS_ENCODING_ZIPLIST);
 
     if (enc == REDIS_ENCODING_ZIPLIST) {
         /* Nothing to do... */
 
-    } else if (enc == REDIS_ENCODING_HT) {
+    } else if (enc == REDIS_ENCODING_HT) {//转为hash
         hashTypeIterator *hi;
         dict *dict;
         int ret;
 
         hi = hashTypeInitIterator(o);
+        //创建dict
         dict = dictCreate(&hashDictType, NULL);
 
         while (hashTypeNext(hi) != REDIS_ERR) {
@@ -440,6 +456,7 @@ void hashTypeConvertZiplist(robj *o, int enc) {
         zfree(o->ptr);
 
         o->encoding = REDIS_ENCODING_HT;
+        //指向hashTable
         o->ptr = dict;
 
     } else {

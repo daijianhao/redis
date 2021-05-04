@@ -528,6 +528,7 @@ int anetUnixServer(char *err, char *path, mode_t perm, int backlog)
 static int anetGenericAccept(char *err, int s, struct sockaddr *sa, socklen_t *len) {
     int fd;
     while(1) {
+        //从文件描述符取出对端的fd
         fd = accept(s,sa,len);
         if (fd == -1) {
             if (errno == EINTR)
@@ -549,7 +550,7 @@ int anetTcpAccept(char *err, int s, char *ip, size_t ip_len, int *port) {
     if ((fd = anetGenericAccept(err,s,(struct sockaddr*)&sa,&salen)) == -1)
         return ANET_ERR;
 
-    if (sa.ss_family == AF_INET) {
+    if (sa.ss_family == AF_INET) {//IPv4
         struct sockaddr_in *s = (struct sockaddr_in *)&sa;
         if (ip) inet_ntop(AF_INET,(void*)&(s->sin_addr),ip,ip_len);
         if (port) *port = ntohs(s->sin_port);
