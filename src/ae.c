@@ -346,6 +346,7 @@ static int processTimeEvents(aeEventLoop *eventLoop) {
  * if flags has AE_CALL_BEFORE_SLEEP set, the beforesleep callback is called.
  *
  * The function returns the number of events processed. */
+//处理事件循环
 int aeProcessEvents(aeEventLoop *eventLoop, int flags)
 {
     int processed = 0, numevents;
@@ -392,7 +393,9 @@ int aeProcessEvents(aeEventLoop *eventLoop, int flags)
             eventLoop->beforesleep(eventLoop);
 
         /* Call the multiplexing API, will return only on timeout or when
-         * some event fires. */
+         * some event fires.
+         * 这里拉取准备好的事件
+         * */
         numevents = aeApiPoll(eventLoop, tvp);
 
         /* After sleep callback. */
@@ -400,6 +403,9 @@ int aeProcessEvents(aeEventLoop *eventLoop, int flags)
             eventLoop->aftersleep(eventLoop);
 
         for (j = 0; j < numevents; j++) {
+            //依次遍历就绪的事件
+
+            //取到文件描述符
             aeFileEvent *fe = &eventLoop->events[eventLoop->fired[j].fd];
             int mask = eventLoop->fired[j].mask;
             int fd = eventLoop->fired[j].fd;
@@ -425,6 +431,7 @@ int aeProcessEvents(aeEventLoop *eventLoop, int flags)
              * Fire the readable event if the call sequence is not
              * inverted. */
             if (!invert && fe->mask & mask & AE_READABLE) {
+                //可读事件
                 fe->rfileProc(eventLoop,fd,fe->clientData,mask);
                 fired++;
                 fe = &eventLoop->events[fd]; /* Refresh in case of resize. */
@@ -453,7 +460,9 @@ int aeProcessEvents(aeEventLoop *eventLoop, int flags)
             processed++;
         }
     }
-    /* Check time events */
+    /* Check time events
+     * 处理定时任务
+     * */
     if (flags & AE_TIME_EVENTS)
         processed += processTimeEvents(eventLoop);
 

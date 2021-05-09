@@ -3181,6 +3181,7 @@ void initServer(void) {
     adjustOpenFilesLimit();
     const char *clk_msg = monotonicInit();
     serverLog(LL_NOTICE, "monotonic clock: %s", clk_msg);
+    //创建EventLoop
     server.el = aeCreateEventLoop(server.maxclients+CONFIG_FDSET_INCR);
     if (server.el == NULL) {
         serverLog(LL_WARNING,
@@ -5905,6 +5906,10 @@ void loadDataFromDisk(void) {
     }
 }
 
+/**
+ * 设置内存溢出处理器
+ * @param allocation_size
+ */
 void redisOutOfMemoryHandler(size_t allocation_size) {
     serverLog(LL_WARNING,"Out Of Memory allocating %zu bytes!",
         allocation_size);
@@ -6277,6 +6282,7 @@ int main(int argc, char **argv) {
     }
 
     readOOMScoreAdj();
+    //初始化server
     initServer();
     if (background || server.pidfile) createPidFile();
     if (server.set_proc_title) redisSetProcTitle(NULL);
@@ -6347,7 +6353,7 @@ int main(int argc, char **argv) {
 
     redisSetCpuAffinity(server.server_cpulist);
     setOOMScoreAdj(-1);
-
+    //开启事件循环
     aeMain(server.el);
     aeDeleteEventLoop(server.el);
     return 0;
